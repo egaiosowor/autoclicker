@@ -42,20 +42,9 @@ struct HotkeySettingsView: View {
             VStack(spacing: 8) {
                 hotkeyRow(
                     label: "Start / Stop",
-                    description: "Toggle auto clicking on/off",
+                    description: "Toggle clicking on or off (or press ⎋ Esc to stop)",
                     combo: $hotkeys.startStopCombo,
-                    action: .toggleStartStop,
                     defaultCombo: Constants.defaultStartStopCombo
-                )
-
-                Divider()
-
-                hotkeyRow(
-                    label: "Pause / Resume",
-                    description: "Temporarily pause clicking",
-                    combo: $hotkeys.pauseResumeCombo,
-                    action: .togglePause,
-                    defaultCombo: Constants.defaultPauseResumeCombo
                 )
             }
             .padding(12)
@@ -69,17 +58,17 @@ struct HotkeySettingsView: View {
 
             // Presets and helper text
             HStack {
-                Text("Click a key to record. Press ⎋ Esc to cancel.")
+                Text("Click a key to record. Press ⎋ Esc to emergency stop.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Menu {
-                    Button("Reset to Defaults (⌥⌘S / ⌥⌘P)") {
+                    Button("Reset to Default (⌥⌘S)") {
                         hotkeys.resetToDefaults()
                     }
-                    Button("Use Function Keys (F6 / ⇧F6)") {
+                    Button("Use Function Key (F6)") {
                         hotkeys.setToF6Defaults()
                     }
                 } label: {
@@ -97,7 +86,6 @@ struct HotkeySettingsView: View {
         label: String,
         description: String,
         combo: Binding<KeyCombo>,
-        action: HotkeyAction,
         defaultCombo: KeyCombo
     ) -> some View {
         HStack {
@@ -113,12 +101,12 @@ struct HotkeySettingsView: View {
 
             HotkeyRecorderButton(
                 combo: combo,
-                validate: { hotkeys.validate($0, for: action) },
+                validate: { hotkeys.validate($0) },
                 onError: { errorMessage = $0 }
             )
 
             Button {
-                if let error = hotkeys.validate(defaultCombo, for: action) {
+                if let error = hotkeys.validate(defaultCombo) {
                     errorMessage = error
                 } else {
                     combo.wrappedValue = defaultCombo

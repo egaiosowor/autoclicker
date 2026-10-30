@@ -94,40 +94,22 @@ struct MainView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        HStack(spacing: 12) {
-            // Start / Stop button
-            Button {
-                appState.toggleEngine()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: appState.engine.isRunning ? "stop.fill" : "play.fill")
-                    Text(appState.engine.isRunning ? "Stop" : "Start")
-                        .font(.body.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
+        // Start / Stop button
+        Button {
+            appState.toggleEngine()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: appState.engine.isRunning ? "stop.fill" : "play.fill")
+                Text(appState.engine.isRunning ? "Stop" : "Start")
+                    .font(.body.weight(.semibold))
             }
-            .buttonStyle(.borderedProminent)
-            .tint(appState.engine.isRunning ? .red : .accentColor)
-            .controlSize(.large)
-            .keyboardShortcut(.return, modifiers: [])
-
-            // Pause / Resume button (only when running)
-            if appState.engine.isRunning {
-                Button {
-                    appState.togglePause()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: appState.engine.isPaused ? "play.fill" : "pause.fill")
-                        Text(appState.engine.isPaused ? "Resume" : "Pause")
-                    }
-                    .frame(height: 36)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
         }
+        .buttonStyle(.borderedProminent)
+        .tint(appState.engine.isRunning ? .red : .accentColor)
+        .controlSize(.large)
+        .keyboardShortcut(.return, modifiers: [])
         .animation(.easeInOut(duration: 0.2), value: appState.engine.isRunning)
     }
 

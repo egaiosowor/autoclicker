@@ -30,15 +30,8 @@ enum Constants {
         modifiers: [.option, .command]
     )
 
-    /// Default Pause / Resume shortcut: Option + Command + P
-    static let defaultPauseResumeCombo = KeyCombo(
-        keyCode: UInt16(kVK_ANSI_P),
-        modifiers: [.option, .command]
-    )
-
-    /// Legacy F6 shortcuts
+    /// Function key preset: F6
     static let defaultF6StartStopCombo = KeyCombo(keyCode: UInt16(kVK_F6))
-    static let defaultF6PauseResumeCombo = KeyCombo(keyCode: UInt16(kVK_F6), modifiers: [.shift])
 
     // MARK: UI
 

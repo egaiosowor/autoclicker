@@ -39,13 +39,11 @@ struct StatusBarView: View {
     }
 
     private var statusColor: Color {
-        if engine.isPaused { return .yellow }
         if engine.isRunning { return .green }
         return .gray
     }
 
     private var statusLabel: String {
-        if engine.isPaused { return "Paused" }
         if engine.isRunning { return "Running" }
         return "Idle"
     }

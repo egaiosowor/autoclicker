@@ -6,7 +6,7 @@ import Foundation
 
 enum HotkeyAction {
     case toggleStartStop
-    case togglePause
+    case stopOnly
 }
 
 // MARK: - Hotkey Manager
@@ -21,18 +21,10 @@ final class HotkeyManager: ObservableObject {
 
     private let lock = NSLock()
     private var cachedStartStopCombo: KeyCombo
-    private var cachedPauseResumeCombo: KeyCombo
 
     @Published var startStopCombo: KeyCombo {
         didSet {
             lock.withLock { cachedStartStopCombo = startStopCombo }
-            saveCombos()
-        }
-    }
-
-    @Published var pauseResumeCombo: KeyCombo {
-        didSet {
-            lock.withLock { cachedPauseResumeCombo = pauseResumeCombo }
             saveCombos()
         }
     }
@@ -49,16 +41,11 @@ final class HotkeyManager: ObservableObject {
     private var threadRunLoop: CFRunLoop?
 
     private static let startStopKey = "AutoClicker.Hotkey.StartStop"
-    private static let pauseResumeKey = "AutoClicker.Hotkey.PauseResume"
 
     init() {
         let loadedStartStop = Self.loadCombo(forKey: Self.startStopKey) ?? Constants.defaultStartStopCombo
-        let loadedPauseResume = Self.loadCombo(forKey: Self.pauseResumeKey) ?? Constants.defaultPauseResumeCombo
-
         self.cachedStartStopCombo = loadedStartStop
-        self.cachedPauseResumeCombo = loadedPauseResume
         self.startStopCombo = loadedStartStop
-        self.pauseResumeCombo = loadedPauseResume
     }
 
     // MARK: - Persistence
@@ -66,9 +53,6 @@ final class HotkeyManager: ObservableObject {
     private func saveCombos() {
         if let data = try? JSONEncoder().encode(startStopCombo) {
             UserDefaults.standard.set(data, forKey: Self.startStopKey)
-        }
-        if let data = try? JSONEncoder().encode(pauseResumeCombo) {
-            UserDefaults.standard.set(data, forKey: Self.pauseResumeKey)
         }
     }
 
@@ -82,24 +66,18 @@ final class HotkeyManager: ObservableObject {
 
     func resetToDefaults() {
         startStopCombo = Constants.defaultStartStopCombo
-        pauseResumeCombo = Constants.defaultPauseResumeCombo
     }
 
     func setToF6Defaults() {
         startStopCombo = Constants.defaultF6StartStopCombo
-        pauseResumeCombo = Constants.defaultF6PauseResumeCombo
     }
 
     // MARK: - Validation
 
-    /// Returns a user-facing error if `combo` is not allowed for `action`.
-    func validate(_ combo: KeyCombo, for action: HotkeyAction) -> String? {
+    /// Returns a user-facing error if `combo` is not allowed.
+    func validate(_ combo: KeyCombo) -> String? {
         if combo.modifierFlags.isEmpty && !combo.isFunctionKey {
             return "Use at least one modifier (⌘ ⌥ ⌃ ⇧) or a function key."
-        }
-        let other = (action == .toggleStartStop) ? pauseResumeCombo : startStopCombo
-        if combo == other {
-            return "That shortcut is already used by the other action."
         }
         return nil
     }
@@ -206,19 +184,18 @@ final class HotkeyManager: ObservableObject {
             let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
             let flags = event.flags
 
+            // Emergency stop with Escape key (does not swallow Escape so other apps still work)
+            if keyCode == UInt16(kVK_Escape) {
+                DispatchQueue.main.async { manager.onHotkey?(.stopOnly) }
+                return Unmanaged.passUnretained(event)
+            }
+
             let startStop = manager.lock.withLock { manager.cachedStartStopCombo }
-            let pauseResume = manager.lock.withLock { manager.cachedPauseResumeCombo }
 
             // Match configured Start / Stop shortcut
             if startStop.matches(keyCode: keyCode, flags: flags) {
                 DispatchQueue.main.async { manager.onHotkey?(.toggleStartStop) }
                 return nil  // swallow the event
-            }
-
-            // Match configured Pause / Resume shortcut
-            if pauseResume.matches(keyCode: keyCode, flags: flags) {
-                DispatchQueue.main.async { manager.onHotkey?(.togglePause) }
-                return nil
             }
 
             return Unmanaged.passUnretained(event)

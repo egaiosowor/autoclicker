@@ -26,11 +26,10 @@ final class KeyComboTests: XCTestCase {
 final class HotkeyValidationTests: XCTestCase {
     func testValidation() {
         let manager = HotkeyManager()
-        XCTAssertNotNil(manager.validate(KeyCombo(keyCode: UInt16(kVK_ANSI_S)), for: .toggleStartStop),
+        XCTAssertNotNil(manager.validate(KeyCombo(keyCode: UInt16(kVK_ANSI_S))),
                         "bare letter must be rejected")
-        XCTAssertNil(manager.validate(KeyCombo(keyCode: UInt16(kVK_F8)), for: .toggleStartStop))
-        XCTAssertNotNil(manager.validate(manager.pauseResumeCombo, for: .toggleStartStop),
-                        "duplicate of the other action must be rejected")
+        XCTAssertNil(manager.validate(KeyCombo(keyCode: UInt16(kVK_F8))))
+        XCTAssertNil(manager.validate(KeyCombo(keyCode: UInt16(kVK_ANSI_S), modifiers: [.option, .command])))
     }
 }
 

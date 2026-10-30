@@ -36,8 +36,8 @@ final class AppState: ObservableObject {
             switch action {
             case .toggleStartStop:
                 self.toggleEngine()
-            case .togglePause:
-                self.togglePause()
+            case .stopOnly:
+                self.stopEngine()
             }
         }
 
@@ -94,14 +94,6 @@ final class AppState: ObservableObject {
                 return
             }
             engine.start(config: currentConfiguration)
-        }
-    }
-
-    func togglePause() {
-        if engine.isPaused {
-            engine.resume()
-        } else {
-            engine.pause()
         }
     }
 

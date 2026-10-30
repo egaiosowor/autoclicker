@@ -10,7 +10,6 @@ final class ClickEngine: ObservableObject {
     // MARK: Published State
 
     @Published private(set) var isRunning = false
-    @Published private(set) var isPaused = false
     @Published private(set) var clickCount: Int = 0
     @Published private(set) var startDate: Date?
     @Published private(set) var activeTargetIndex: Int = 0
@@ -24,7 +23,6 @@ final class ClickEngine: ObservableObject {
     private var timer: DispatchSourceTimer?
     private var config: ClickConfiguration?
     private var running = false
-    private var paused = false
     private var lastCursorPosition: CGPoint?
     private var localClickCount: Int = 0
     private var lastUIUpdateTime: CFAbsoluteTime = 0
@@ -53,14 +51,11 @@ final class ClickEngine: ObservableObject {
         activeTargetIndex = 0
         startDate = Date()
         isRunning = true
-        isPaused = false
 
         queue.async { [weak self] in
             guard let self = self else { return }
-            NSLog("[ClickEngine] start() running with %ld targets: %@", config.targets.count, config.targets.map { "(\($0.x), \($0.y))" }.joined(separator: ", "))
             self.config = config
             self.running = true
-            self.paused = false
             self.localClickCount = 0
             self.lastUIUpdateTime = 0
             self.lastCursorPosition = nil
@@ -79,31 +74,10 @@ final class ClickEngine: ObservableObject {
         }
     }
 
-    /// Pauses the click loop. Safe to call when already paused.
-    func pause() {
-        guard isRunning, !isPaused else { return }
-        isPaused = true
-        queue.async { [weak self] in
-            self?.paused = true
-        }
-    }
-
-    /// Resumes a paused click loop.
-    func resume() {
-        guard isRunning, isPaused else { return }
-        isPaused = false
-        queue.async { [weak self] in
-            guard let self = self, self.running, self.paused else { return }
-            self.paused = false
-            self.schedule(after: 0)
-        }
-    }
-
     /// Completely stops and tears down the engine.
     func stop() {
         guard isRunning else { return }
         isRunning = false
-        isPaused = false
 
         queue.async { [weak self] in
             guard let self = self else { return }
@@ -119,7 +93,6 @@ final class ClickEngine: ObservableObject {
 
     private func teardown() {
         running = false
-        paused = false
         timer?.cancel()
         timer = nil
         config = nil
@@ -131,7 +104,7 @@ final class ClickEngine: ObservableObject {
 
     /// Re-arms the single timer; no new timer is allocated per click.
     private func schedule(after delay: TimeInterval) {
-        guard running, !paused, let timer = timer else { return }
+        guard running, let timer = timer else { return }
         let deadline: DispatchTime = delay <= 0 ? .now() : (.now() + delay)
         timer.schedule(deadline: deadline, leeway: .nanoseconds(0))
     }
@@ -139,7 +112,7 @@ final class ClickEngine: ObservableObject {
     // MARK: - Tick
 
     private func tick() {
-        guard running, !paused, let config = config, !config.targets.isEmpty else { return }
+        guard running, let config = config, !config.targets.isEmpty else { return }
 
         // --- Determine target coordinate for this tick ---
         let targetIndex = currentTargetIndex % config.targets.count
@@ -159,7 +132,6 @@ final class ClickEngine: ObservableObject {
                         guard let self = self else { return }
                         self.clickCount = finalCount
                         self.isRunning = false
-                        self.isPaused = false
                         self.engineError = .cursorInterrupt
                     }
                     return
@@ -196,7 +168,6 @@ final class ClickEngine: ObservableObject {
                     guard let self = self else { return }
                     self.clickCount = currentCount
                     self.isRunning = false
-                    self.isPaused = false
                 }
                 return
             }
