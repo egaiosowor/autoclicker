@@ -22,6 +22,10 @@ targets:
         excludes:
           - "*.entitlements"
           - "Info.plist"
+    postBuildScripts:
+      - name: Re-sign with stable identity
+        script: '"$SRCROOT/scripts/resign.sh"'
+        basedOnDependencyAnalysis: false
     info:
       path: AutoClickerPro/Info.plist
     entitlements:
@@ -33,7 +37,9 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         INFOPLIST_FILE: AutoClickerPro/Info.plist
         CODE_SIGN_ENTITLEMENTS: AutoClickerPro/AutoClickerPro.entitlements
+        CODE_SIGNING_ALLOWED: NO   # signing is done by scripts/resign.sh
         ENABLE_APP_SANDBOX: false
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         ENABLE_HARDENED_RUNTIME: false
       configs:
         Release:
