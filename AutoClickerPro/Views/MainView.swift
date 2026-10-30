@@ -94,23 +94,9 @@ struct MainView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        // Start / Stop button
-        Button {
+        FooterActionView(engine: appState.engine) {
             appState.toggleEngine()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: appState.engine.isRunning ? "stop.fill" : "play.fill")
-                Text(appState.engine.isRunning ? "Stop" : "Start")
-                    .font(.body.weight(.semibold))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 36)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(appState.engine.isRunning ? .red : .accentColor)
-        .controlSize(.large)
-        .keyboardShortcut(.return, modifiers: [])
-        .animation(.easeInOut(duration: 0.2), value: appState.engine.isRunning)
     }
 
     // MARK: - Error Banner
@@ -137,5 +123,32 @@ struct MainView: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(.red.opacity(0.3), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Footer Action View
+
+/// Observes engine directly so the Start / Stop button immediately updates when finite sequences end.
+struct FooterActionView: View {
+    @ObservedObject var engine: ClickEngine
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button {
+            onToggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: engine.isRunning ? "stop.fill" : "play.fill")
+                Text(engine.isRunning ? "Stop" : "Start")
+                    .font(.body.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(engine.isRunning ? .red : .accentColor)
+        .controlSize(.large)
+        .keyboardShortcut(.return, modifiers: [])
+        .animation(.easeInOut(duration: 0.2), value: engine.isRunning)
     }
 }

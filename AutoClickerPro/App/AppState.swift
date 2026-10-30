@@ -41,6 +41,14 @@ final class AppState: ObservableObject {
             }
         }
 
+        // Forward engine changes to AppState so any view observing AppState updates immediately
+        engine.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         // React dynamically to permission changes.
         accessibility.$isGranted
             .receive(on: DispatchQueue.main)

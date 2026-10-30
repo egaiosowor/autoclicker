@@ -78,6 +78,7 @@ final class ClickEngine: ObservableObject {
     func stop() {
         guard isRunning else { return }
         isRunning = false
+        activeTargetIndex = 0
 
         queue.async { [weak self] in
             guard let self = self else { return }
@@ -132,6 +133,7 @@ final class ClickEngine: ObservableObject {
                         guard let self = self else { return }
                         self.clickCount = finalCount
                         self.isRunning = false
+                        self.activeTargetIndex = 0
                         self.engineError = .cursorInterrupt
                     }
                     return
@@ -168,6 +170,7 @@ final class ClickEngine: ObservableObject {
                     guard let self = self else { return }
                     self.clickCount = currentCount
                     self.isRunning = false
+                    self.activeTargetIndex = 0
                 }
                 return
             }
