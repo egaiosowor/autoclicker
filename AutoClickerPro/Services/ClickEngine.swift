@@ -138,6 +138,11 @@ final class ClickEngine: ObservableObject {
     private func tick() {
         guard running, !paused, let config = config, !config.targets.isEmpty else { return }
 
+        // --- Determine target coordinate for this tick ---
+        let targetIndex = currentTargetIndex % config.targets.count
+        let target = config.targets[targetIndex]
+        let targetPoint = CGPoint(x: target.x, y: target.y)
+
         // --- Cursor-movement interrupt ---
         if config.cursorInterruptEnabled {
             let current = CGEvent(source: nil)?.location ?? .zero
@@ -157,13 +162,16 @@ final class ClickEngine: ObservableObject {
                     return
                 }
             }
-            lastCursorPosition = current
+        }
+
+        // --- Move hardware cursor to the target coordinate ---
+        CGWarpMouseCursorPosition(targetPoint)
+        if config.cursorInterruptEnabled {
+            lastCursorPosition = targetPoint
         }
 
         // --- Click the current target ---
-        let targetIndex = currentTargetIndex % config.targets.count
-        let target = config.targets[targetIndex]
-        postClick(at: CGPoint(x: target.x, y: target.y), button: config.button, action: config.action)
+        postClick(at: targetPoint, button: config.button, action: config.action)
 
         localClickCount += 1
         let currentCount = localClickCount

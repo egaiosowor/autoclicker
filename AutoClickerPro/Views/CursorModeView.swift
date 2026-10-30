@@ -150,10 +150,12 @@ struct CursorModeView: View {
     // MARK: - Actions
 
     private func addTarget() {
-        let lastDelay = targets.last?.delayMs ?? 0
-        let newTarget = TargetPoint(x: 500, y: 500, delayMs: lastDelay)
+        let lastTarget = targets.last
+        let lastDelay = lastTarget?.delayMs ?? 0
+        let newX = (lastTarget?.x ?? 480) + 20
+        let newY = (lastTarget?.y ?? 480) + 20
+        let newTarget = TargetPoint(x: newX, y: newY, delayMs: lastDelay)
         targets.append(newTarget)
-        startPicking(for: newTarget.id)
     }
 
     private func deleteTarget(id: UUID) {
@@ -180,14 +182,15 @@ struct CursorModeView: View {
         pickingTargetId = targetId
         startMouseTracking()
 
-        // Local monitor (when app window has focus)
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { event in
-            if event.type == .keyDown && (event.keyCode == 36 || event.keyCode == 49) {
-                if let id = self.pickingTargetId {
-                    self.capturePosition(for: id)
-                }
+        // Local monitor (when app window has focus): Esc to cancel, Enter/Space to lock
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            // Esc (53) cancels picking
+            if event.keyCode == 53 {
+                self.stopPicking()
                 return nil
-            } else if event.type == .leftMouseDown {
+            }
+            // Return (36) or Space (49) locks position
+            if event.keyCode == 36 || event.keyCode == 49 {
                 if let id = self.pickingTargetId {
                     self.capturePosition(for: id)
                 }

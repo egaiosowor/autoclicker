@@ -68,3 +68,19 @@ final class EngineValidationTests: XCTestCase {
         XCTAssertEqual(engine.engineError, .noTargets)
     }
 }
+
+final class MultiTargetTests: XCTestCase {
+    func testMultiTargetSequence() {
+        var config = ClickConfiguration()
+        config.targets = [
+            TargetPoint(x: 100, y: 100, delayMs: 10),
+            TargetPoint(x: 200, y: 200, delayMs: 20),
+            TargetPoint(x: 300, y: 300, delayMs: 30)
+        ]
+        config.executionLimit = .count(3)
+        XCTAssertEqual(config.targets.count, 3)
+        XCTAssertEqual(config.targets[0].x, 100)
+        XCTAssertEqual(config.targets[1].x, 200)
+        XCTAssertEqual(config.targets[2].x, 300)
+    }
+}
