@@ -187,16 +187,19 @@ final class ClickEngine: ObservableObject {
             self?.activeTargetIndex = currentIdx
         }
 
-        // --- Execution limit ---
-        if case .count(let max) = config.executionLimit, currentCount >= max {
-            teardown()
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.clickCount = currentCount
-                self.isRunning = false
-                self.isPaused = false
+        // --- Execution limit (runs N full cycles through all targets) ---
+        if case .count(let cycles) = config.executionLimit {
+            let totalNeeded = max(cycles, 1) * config.targets.count
+            if currentCount >= totalNeeded {
+                teardown()
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.clickCount = currentCount
+                    self.isRunning = false
+                    self.isPaused = false
+                }
+                return
             }
-            return
         }
 
         currentTargetIndex = (targetIndex + 1) % config.targets.count

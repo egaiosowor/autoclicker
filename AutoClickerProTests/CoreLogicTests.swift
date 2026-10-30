@@ -96,7 +96,8 @@ final class EngineMultiTargetExecutionTests: XCTestCase {
             TargetPoint(x: 222, y: 222, delayMs: 0),
             TargetPoint(x: 333, y: 333, delayMs: 0)
         ]
-        config.executionLimit = .count(6)
+        // 2 cycles through 3 targets = 6 total clicks
+        config.executionLimit = .count(2)
         
         let expectation = XCTestExpectation(description: "Engine completes 6 clicks across 3 targets")
         

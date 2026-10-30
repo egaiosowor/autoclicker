@@ -42,7 +42,8 @@ struct MainView: View {
                     // Execution limit
                     ExecutionLimitView(
                         isFinite: $appState.executionLimitIsFinite,
-                        count: $appState.executionLimitCount
+                        count: $appState.executionLimitCount,
+                        targetCount: appState.targets.count
                     )
 
                     // Cursor mode (Fixed targets)
