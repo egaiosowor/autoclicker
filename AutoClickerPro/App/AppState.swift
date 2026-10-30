@@ -83,6 +83,9 @@ final class AppState: ObservableObject {
     // MARK: - Actions
 
     func toggleEngine() {
+        // Resign first responder so any active text field commits its value immediately
+        NSApp.keyWindow?.makeFirstResponder(nil)
+
         if engine.isRunning {
             engine.stop()
         } else {

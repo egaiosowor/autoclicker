@@ -5,6 +5,7 @@ import SwiftUI
 /// Multi-point coordinate queue with individual wait delays. Always fixed coordinates.
 struct CursorModeView: View {
     @Binding var targets: [TargetPoint]
+    @ObservedObject var engine: ClickEngine
 
     @State private var pickingTargetId: UUID? = nil
     @State private var liveMousePosition: CGPoint = .zero
@@ -74,13 +75,21 @@ struct CursorModeView: View {
         let id = target.wrappedValue.id
         let index = targets.firstIndex(where: { $0.id == id }) ?? 0
         let isPickingThis = (pickingTargetId == id)
+        let isActive = engine.isRunning && (engine.activeTargetIndex == index)
 
         return HStack(spacing: 6) {
-            // Target badge
-            Text("P\(index + 1)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(isPickingThis ? .blue : .primary)
-                .frame(width: 22, alignment: .leading)
+            // Target badge with active indicator
+            HStack(spacing: 4) {
+                if isActive {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 6, height: 6)
+                }
+                Text("P\(index + 1)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(isActive ? .green : (isPickingThis ? .blue : .primary))
+            }
+            .frame(width: isActive ? 34 : 24, alignment: .leading)
 
             // X coordinate
             HStack(spacing: 2) {
@@ -90,6 +99,7 @@ struct CursorModeView: View {
                 TextField("X", value: target.x, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 56)
+                    .onSubmit { NSApp.keyWindow?.makeFirstResponder(nil) }
             }
 
             // Y coordinate
@@ -100,6 +110,7 @@ struct CursorModeView: View {
                 TextField("Y", value: target.y, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 56)
+                    .onSubmit { NSApp.keyWindow?.makeFirstResponder(nil) }
             }
 
             // Individual Delay
@@ -110,6 +121,7 @@ struct CursorModeView: View {
                 TextField("ms", value: target.delayMs, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 50)
+                    .onSubmit { NSApp.keyWindow?.makeFirstResponder(nil) }
                 Text("ms")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -142,8 +154,17 @@ struct CursorModeView: View {
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
         .background(
-            isPickingThis ? Color.blue.opacity(0.08) : Color.primary.opacity(0.04),
+            isActive ? Color.green.opacity(0.12) :
+            (isPickingThis ? Color.blue.opacity(0.08) : Color.primary.opacity(0.04)),
             in: RoundedRectangle(cornerRadius: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(
+                    isActive ? Color.green.opacity(0.5) :
+                    (isPickingThis ? Color.blue.opacity(0.4) : Color.clear),
+                    lineWidth: 1
+                )
         )
     }
 
@@ -182,19 +203,26 @@ struct CursorModeView: View {
         pickingTargetId = targetId
         startMouseTracking()
 
-        // Local monitor (when app window has focus): Esc to cancel, Enter/Space to lock
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+        // Local monitor (when app window has focus): Esc to cancel, Enter/Space/Click to lock
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { event in
             // Esc (53) cancels picking
-            if event.keyCode == 53 {
+            if event.type == .keyDown && event.keyCode == 53 {
                 self.stopPicking()
                 return nil
             }
             // Return (36) or Space (49) locks position
-            if event.keyCode == 36 || event.keyCode == 49 {
+            if event.type == .keyDown && (event.keyCode == 36 || event.keyCode == 49) {
                 if let id = self.pickingTargetId {
                     self.capturePosition(for: id)
                 }
                 return nil
+            }
+            // Left click inside window locks position
+            if event.type == .leftMouseDown {
+                if let id = self.pickingTargetId {
+                    self.capturePosition(for: id)
+                }
+                return event
             }
             return event
         }

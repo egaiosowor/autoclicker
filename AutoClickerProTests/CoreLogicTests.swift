@@ -84,3 +84,31 @@ final class MultiTargetTests: XCTestCase {
         XCTAssertEqual(config.targets[2].x, 300)
     }
 }
+
+final class EngineMultiTargetExecutionTests: XCTestCase {
+    func testEngineCyclesThroughMultipleTargets() {
+        let engine = ClickEngine()
+        var config = ClickConfiguration()
+        config.intervalValue = 10
+        config.intervalUnit = .milliseconds
+        config.targets = [
+            TargetPoint(x: 111, y: 111, delayMs: 0),
+            TargetPoint(x: 222, y: 222, delayMs: 0),
+            TargetPoint(x: 333, y: 333, delayMs: 0)
+        ]
+        config.executionLimit = .count(6)
+        
+        let expectation = XCTestExpectation(description: "Engine completes 6 clicks across 3 targets")
+        
+        engine.start(config: config)
+        
+        // Wait up to 1 second for 6 clicks at 10ms each
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            XCTAssertFalse(engine.isRunning)
+            XCTAssertEqual(engine.clickCount, 6)
+            expectation.fulfill()
+        }
+        
+        wait(for: [expectation], timeout: 1.0)
+    }
+}

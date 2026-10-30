@@ -13,6 +13,7 @@ final class ClickEngine: ObservableObject {
     @Published private(set) var isPaused = false
     @Published private(set) var clickCount: Int = 0
     @Published private(set) var startDate: Date?
+    @Published private(set) var activeTargetIndex: Int = 0
 
     /// Non-nil when the engine refused to start or stopped due to a safety check.
     @Published var engineError: EngineError?
@@ -49,12 +50,14 @@ final class ClickEngine: ObservableObject {
 
         engineError = nil
         clickCount = 0
+        activeTargetIndex = 0
         startDate = Date()
         isRunning = true
         isPaused = false
 
         queue.async { [weak self] in
             guard let self = self else { return }
+            NSLog("[ClickEngine] start() running with %ld targets: %@", config.targets.count, config.targets.map { "(\($0.x), \($0.y))" }.joined(separator: ", "))
             self.config = config
             self.running = true
             self.paused = false
@@ -166,6 +169,9 @@ final class ClickEngine: ObservableObject {
 
         // --- Move hardware cursor to the target coordinate ---
         CGWarpMouseCursorPosition(targetPoint)
+        if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: targetPoint, mouseButton: .left) {
+            move.post(tap: .cghidEventTap)
+        }
         if config.cursorInterruptEnabled {
             lastCursorPosition = targetPoint
         }
@@ -175,6 +181,11 @@ final class ClickEngine: ObservableObject {
 
         localClickCount += 1
         let currentCount = localClickCount
+        let currentIdx = targetIndex
+
+        DispatchQueue.main.async { [weak self] in
+            self?.activeTargetIndex = currentIdx
+        }
 
         // --- Execution limit ---
         if case .count(let max) = config.executionLimit, currentCount >= max {

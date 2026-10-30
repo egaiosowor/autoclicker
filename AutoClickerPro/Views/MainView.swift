@@ -46,7 +46,7 @@ struct MainView: View {
                     )
 
                     // Cursor mode (Fixed targets)
-                    CursorModeView(targets: $appState.targets)
+                    CursorModeView(targets: $appState.targets, engine: appState.engine)
 
                     // Safety toggle
                     Toggle(isOn: $appState.cursorInterruptEnabled) {
