@@ -37,9 +37,7 @@ final class HotkeyValidationTests: XCTestCase {
 final class IntervalTests: XCTestCase {
     func testUnitConversion() {
         XCTAssertEqual(IntervalUnit.milliseconds.toSeconds(250), 0.25, accuracy: 1e-9)
-        XCTAssertEqual(IntervalUnit.seconds.toSeconds(2), 2, accuracy: 1e-9)
         XCTAssertEqual(IntervalUnit.minutes.toSeconds(2), 120, accuracy: 1e-9)
-        XCTAssertEqual(IntervalUnit.hours.toSeconds(1), 3600, accuracy: 1e-9)
     }
 
     func testSafetyGuard() {

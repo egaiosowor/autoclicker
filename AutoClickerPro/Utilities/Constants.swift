@@ -54,18 +54,14 @@ enum Constants {
 
 enum IntervalUnit: String, CaseIterable, Identifiable {
     case milliseconds = "ms"
-    case seconds = "s"
     case minutes = "min"
-    case hours = "h"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .milliseconds: return "Milliseconds"
-        case .seconds: return "Seconds"
         case .minutes: return "Minutes"
-        case .hours: return "Hours"
         }
     }
 
@@ -73,9 +69,7 @@ enum IntervalUnit: String, CaseIterable, Identifiable {
     func toSeconds(_ value: Double) -> TimeInterval {
         switch self {
         case .milliseconds: return value / 1_000.0
-        case .seconds: return value
         case .minutes: return value * 60.0
-        case .hours: return value * 3600.0
         }
     }
 }
