@@ -228,7 +228,18 @@ final class ClickEngine: ObservableObject {
             }
 
             down.post(tap: .cghidEventTap)
+
+            if clickCount > 1 {
+                // Realistic ~10ms button-down hold for multi-click recognition
+                usleep(10_000)
+            }
+
             up.post(tap: .cghidEventTap)
+
+            if state < clickCount {
+                // Realistic ~20ms gap between successive clicks (well within macOS 500ms threshold)
+                usleep(20_000)
+            }
         }
     }
 }
