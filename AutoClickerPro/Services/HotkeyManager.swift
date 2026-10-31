@@ -5,8 +5,8 @@ import Foundation
 
 // MARK: - Hotkey Action
 
-enum HotkeyAction {
-    case toggleStartStop
+enum HotkeyAction: Equatable {
+    case triggerProfile(UUID)
     case stopOnly
 }
 
@@ -21,12 +21,12 @@ final class HotkeyManager: ObservableObject {
     @Published private(set) var isListening = false
 
     private let lock = NSLock()
-    private var cachedStartStopCombo: KeyCombo
+    private var cachedProfileHotkeys: [UUID: KeyCombo] = [:]
 
-    @Published var startStopCombo: KeyCombo {
+    /// Mapping of profile ID to its global hotkey combo.
+    @Published var profileHotkeys: [UUID: KeyCombo] = [:] {
         didSet {
-            lock.withLock { cachedStartStopCombo = startStopCombo }
-            saveCombos()
+            lock.withLock { cachedProfileHotkeys = profileHotkeys }
         }
     }
 
@@ -41,36 +41,10 @@ final class HotkeyManager: ObservableObject {
     private var runLoopSource: CFRunLoopSource?
     private var threadRunLoop: CFRunLoop?
 
-    private static let startStopKey = "AutoClicker.Hotkey.StartStop"
+    init() {}
 
-    init() {
-        let loadedStartStop = Self.loadCombo(forKey: Self.startStopKey) ?? Constants.defaultStartStopCombo
-        self.cachedStartStopCombo = loadedStartStop
-        self.startStopCombo = loadedStartStop
-    }
-
-    // MARK: - Persistence
-
-    private func saveCombos() {
-        if let data = try? JSONEncoder().encode(startStopCombo) {
-            UserDefaults.standard.set(data, forKey: Self.startStopKey)
-        }
-    }
-
-    private static func loadCombo(forKey key: String) -> KeyCombo? {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let combo = try? JSONDecoder().decode(KeyCombo.self, from: data) else {
-            return nil
-        }
-        return combo
-    }
-
-    func resetToDefaults() {
-        startStopCombo = Constants.defaultStartStopCombo
-    }
-
-    func setToF6Defaults() {
-        startStopCombo = Constants.defaultF6StartStopCombo
+    func setHotkeys(_ hotkeys: [UUID: KeyCombo]) {
+        self.profileHotkeys = hotkeys
     }
 
     // MARK: - Validation
@@ -148,6 +122,7 @@ final class HotkeyManager: ObservableObject {
             CFRunLoopSourceInvalidate(source)
             return
         }
+
         eventTap = tap
         runLoopSource = source
         threadRunLoop = runLoop
@@ -191,12 +166,14 @@ final class HotkeyManager: ObservableObject {
                 return Unmanaged.passUnretained(event)
             }
 
-            let startStop = manager.lock.withLock { manager.cachedStartStopCombo }
+            let hotkeys = manager.lock.withLock { manager.cachedProfileHotkeys }
 
-            // Match configured Start / Stop shortcut
-            if startStop.matches(keyCode: keyCode, flags: flags) {
-                DispatchQueue.main.async { manager.onHotkey?(.toggleStartStop) }
-                return nil  // swallow the event
+            // Match configured profile shortcuts
+            for (id, combo) in hotkeys {
+                if combo.matches(keyCode: keyCode, flags: flags) {
+                    DispatchQueue.main.async { manager.onHotkey?(.triggerProfile(id)) }
+                    return nil  // swallow the event
+                }
             }
 
             return Unmanaged.passUnretained(event)

@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Main View
 
-/// The primary app window assembling all configuration panels.
+/// The primary app window assembling all configuration panels and profile management.
 struct MainView: View {
     @ObservedObject var appState: AppState
 
@@ -29,35 +29,43 @@ struct MainView: View {
 
                     // Interval
                     IntervalPickerView(
-                        intervalValue: $appState.intervalValue,
-                        intervalUnit: $appState.intervalUnit
+                        intervalValue: appState.intervalValueBinding,
+                        intervalUnit: appState.intervalUnitBinding
                     )
 
                     // Click type
                     ClickTypePickerView(
-                        button: $appState.clickButton,
-                        action: $appState.clickAction
+                        button: appState.clickButtonBinding,
+                        action: appState.clickActionBinding
                     )
 
                     // Execution limit
                     ExecutionLimitView(
-                        isFinite: $appState.executionLimitIsFinite,
-                        count: $appState.executionLimitCount,
-                        targetCount: appState.targets.count
+                        isFinite: appState.executionLimitIsFiniteBinding,
+                        count: appState.executionLimitCountBinding,
+                        targetCount: appState.selectedProfile.targets.count
                     )
 
                     // Cursor mode (Fixed targets)
-                    CursorModeView(targets: $appState.targets, engine: appState.engine)
+                    CursorModeView(
+                        targets: appState.targetsBinding,
+                        engine: appState.engine
+                    )
 
                     // Safety toggle
-                    Toggle(isOn: $appState.cursorInterruptEnabled) {
+                    Toggle(isOn: appState.cursorInterruptEnabledBinding) {
                         Label("Stop if mouse moves", systemImage: "hand.raised.fill")
                             .font(.subheadline.weight(.medium))
                     }
                     .toggleStyle(.switch)
 
-                    // Hotkey info
-                    HotkeySettingsView(hotkeys: appState.hotkeys)
+                    // Hotkey settings for currently selected profile
+                    HotkeySettingsView(
+                        hotkeys: appState.hotkeys,
+                        combo: appState.selectedHotkeyBinding,
+                        profileID: appState.library.selectedID,
+                        library: appState.library
+                    )
                 }
                 .padding(20)
             }
@@ -80,14 +88,20 @@ struct MainView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
                 Text("AutoClicker Pro")
                     .font(.title2.weight(.bold))
 
-                StatusBarView(engine: appState.engine)
+                Spacer()
+
+                StatusBarView(
+                    engine: appState.engine,
+                    activeProfileName: appState.runningProfile?.name
+                )
             }
-            Spacer()
+
+            ProfilePickerView(appState: appState)
         }
     }
 
@@ -148,7 +162,5 @@ struct FooterActionView: View {
         .buttonStyle(.borderedProminent)
         .tint(engine.isRunning ? .red : .accentColor)
         .controlSize(.large)
-        .keyboardShortcut(.return, modifiers: [])
-        .animation(.easeInOut(duration: 0.2), value: engine.isRunning)
     }
 }

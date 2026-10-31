@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Click Action
 
 /// How many rapid clicks constitute one action.
-enum ClickAction: Int, CaseIterable, Identifiable {
+enum ClickAction: Int, CaseIterable, Identifiable, Codable {
     case single = 1
     case double = 2
     case triple = 3

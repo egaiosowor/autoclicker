@@ -2,9 +2,10 @@ import SwiftUI
 
 // MARK: - Status Bar View
 
-/// Displays the current engine state: click count and elapsed time.
+/// Displays the current engine state: click count, running profile, and elapsed time.
 struct StatusBarView: View {
     @ObservedObject var engine: ClickEngine
+    var activeProfileName: String? = nil
 
     private var elapsed: TimeInterval {
         guard let start = engine.startDate else { return 0 }
@@ -44,7 +45,12 @@ struct StatusBarView: View {
     }
 
     private var statusLabel: String {
-        if engine.isRunning { return "Running" }
+        if engine.isRunning {
+            if let name = activeProfileName {
+                return "Running: \(name)"
+            }
+            return "Running"
+        }
         return "Idle"
     }
 }

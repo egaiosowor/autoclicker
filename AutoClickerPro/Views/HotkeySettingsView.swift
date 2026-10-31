@@ -4,15 +4,18 @@ import SwiftUI
 
 // MARK: - Hotkey Settings View
 
-/// Displays and allows interactive customization of global hotkey bindings.
+/// Displays and allows interactive customization of global hotkey bindings for the current profile.
 struct HotkeySettingsView: View {
     @ObservedObject var hotkeys: HotkeyManager
+    @Binding var combo: KeyCombo?
+    let profileID: UUID
+    let library: ProfileLibrary
     @State private var errorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Global Hotkeys", systemImage: "keyboard")
+                Label("Profile Hotkey", systemImage: "keyboard")
                     .font(.subheadline.weight(.semibold))
 
                 Spacer()
@@ -41,10 +44,9 @@ struct HotkeySettingsView: View {
 
             VStack(spacing: 8) {
                 hotkeyRow(
-                    label: "Start / Stop",
-                    description: "Toggle clicking on or off (or press ⎋ Esc to stop)",
-                    combo: $hotkeys.startStopCombo,
-                    defaultCombo: Constants.defaultStartStopCombo
+                    label: "Start / Stop Shortcut",
+                    description: "Triggers this sequence (or press ⎋ Esc to stop)",
+                    combo: $combo
                 )
             }
             .padding(12)
@@ -58,18 +60,25 @@ struct HotkeySettingsView: View {
 
             // Presets and helper text
             HStack {
-                Text("Click a key to record. Press ⎋ Esc to emergency stop.")
+                Text("Click to record. Press ⎋ Esc to emergency stop.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Menu {
-                    Button("Reset to Default (⌥⌘S)") {
-                        hotkeys.resetToDefaults()
+                    Button("Default (⌥⌘S)") {
+                        applyPreset(Constants.defaultStartStopCombo)
                     }
-                    Button("Use Function Key (F6)") {
-                        hotkeys.setToF6Defaults()
+                    Button("Function Key (F6)") {
+                        applyPreset(Constants.defaultF6StartStopCombo)
+                    }
+                    if combo != nil {
+                        Divider()
+                        Button("Remove Shortcut") {
+                            combo = nil
+                            errorMessage = nil
+                        }
                     }
                 } label: {
                     Text("Presets")
@@ -81,12 +90,24 @@ struct HotkeySettingsView: View {
         }
     }
 
+    private func applyPreset(_ preset: KeyCombo) {
+        if let error = hotkeys.validate(preset) {
+            errorMessage = error
+            return
+        }
+        if let conflict = library.hotkeyConflict(preset, excluding: profileID) {
+            errorMessage = "Already used by '\(conflict.name)'"
+            return
+        }
+        combo = preset
+        errorMessage = nil
+    }
+
     @ViewBuilder
     private func hotkeyRow(
         label: String,
         description: String,
-        combo: Binding<KeyCombo>,
-        defaultCombo: KeyCombo
+        combo: Binding<KeyCombo?>
     ) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -102,23 +123,24 @@ struct HotkeySettingsView: View {
             HotkeyRecorderButton(
                 combo: combo,
                 validate: { hotkeys.validate($0) },
+                conflictCheck: { testCombo in
+                    library.hotkeyConflict(testCombo, excluding: profileID)?.name
+                },
                 onError: { errorMessage = $0 }
             )
 
-            Button {
-                if let error = hotkeys.validate(defaultCombo) {
-                    errorMessage = error
-                } else {
-                    combo.wrappedValue = defaultCombo
+            if combo.wrappedValue != nil {
+                Button {
+                    combo.wrappedValue = nil
                     errorMessage = nil
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.caption)
                 }
-            } label: {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Remove shortcut")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Reset to default (\(defaultCombo.displayString))")
         }
     }
 }
@@ -126,8 +148,9 @@ struct HotkeySettingsView: View {
 // MARK: - Hotkey Recorder Button
 
 struct HotkeyRecorderButton: View {
-    @Binding var combo: KeyCombo
+    @Binding var combo: KeyCombo?
     var validate: (KeyCombo) -> String? = { _ in nil }
+    var conflictCheck: (KeyCombo) -> String? = { _ in nil }
     var onError: (String?) -> Void = { _ in }
     @State private var isRecording: Bool = false
     @State private var monitor: Any?
@@ -145,10 +168,14 @@ struct HotkeyRecorderButton: View {
                     Text("Type keys...")
                         .font(.system(.caption, design: .monospaced).weight(.semibold))
                         .foregroundStyle(.white)
-                } else {
+                } else if let combo = combo {
                     Text(combo.displayString)
                         .font(.system(.caption, design: .monospaced).weight(.semibold))
                         .foregroundStyle(.primary)
+                } else {
+                    Text("None (Click to record)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 10)
@@ -183,6 +210,8 @@ struct HotkeyRecorderButton: View {
             let newCombo = KeyCombo(keyCode: event.keyCode, modifiers: mods)
             if let error = self.validate(newCombo) {
                 self.onError(error)
+            } else if let conflictName = self.conflictCheck(newCombo) {
+                self.onError("Already used by '\(conflictName)'")
             } else {
                 self.onError(nil)
                 self.combo = newCombo

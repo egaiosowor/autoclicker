@@ -1,23 +1,16 @@
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - App State
 
-/// Central observable object wiring services together and holding the user's configuration.
+/// Central observable object wiring services together and holding the user's profile library.
 final class AppState: ObservableObject {
 
-    // MARK: Configuration (bound to UI)
+    // MARK: Library State
 
-    @Published var intervalValue: Double = Constants.defaultIntervalValue
-    @Published var intervalUnit: IntervalUnit = Constants.defaultIntervalUnit
-    @Published var clickButton: ClickButton = .left
-    @Published var clickAction: ClickAction = .single
-    @Published var targets: [TargetPoint] = [
-        TargetPoint(x: 500, y: 500, delayMs: 0)
-    ]
-    @Published var executionLimitIsFinite: Bool = false
-    @Published var executionLimitCount: Int = 100
-    @Published var cursorInterruptEnabled: Bool = false
+    @Published var library: ProfileLibrary
+    @Published var runningProfileID: UUID?
 
     // MARK: Services
 
@@ -29,13 +22,18 @@ final class AppState: ObservableObject {
 
     // MARK: Init
 
-    init() {
+    init(library: ProfileLibrary = ProfileStore.load()) {
+        self.library = library
+
+        // Sync initial hotkeys to manager
+        syncHotkeys()
+
         // Wire hotkey callbacks to engine actions.
         hotkeys.onHotkey = { [weak self] action in
             guard let self = self else { return }
             switch action {
-            case .toggleStartStop:
-                self.toggleEngine()
+            case .triggerProfile(let id):
+                self.triggerProfile(id: id)
             case .stopOnly:
                 self.stopEngine()
             }
@@ -46,6 +44,17 @@ final class AppState: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        // When engine finishes or stops, clear runningProfileID
+        engine.$isRunning
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] running in
+                guard let self = self else { return }
+                if !running {
+                    self.runningProfileID = nil
+                }
             }
             .store(in: &cancellables)
 
@@ -62,7 +71,7 @@ final class AppState: ObservableObject {
                 } else {
                     // Gracefully stop engine and hotkeys if permission is revoked mid-session.
                     if self.engine.isRunning {
-                        self.engine.stop()
+                        self.stopEngine()
                         self.engine.engineError = .permissionDenied
                     }
                     self.hotkeys.stopListening()
@@ -71,41 +80,194 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
     }
 
-    // MARK: - Computed Config
+    // MARK: - Selected Profile Accessors
 
-    /// Builds the current `ClickConfiguration` from published UI state.
-    var currentConfiguration: ClickConfiguration {
-        var config = ClickConfiguration()
-        config.intervalValue = intervalValue
-        config.intervalUnit = intervalUnit
-        config.button = clickButton
-        config.action = clickAction
-        config.targets = targets.isEmpty ? [TargetPoint(x: 500, y: 500, delayMs: 0)] : targets
-        config.executionLimit = executionLimitIsFinite
-            ? .count(executionLimitCount)
-            : .infinite
-        config.cursorInterruptEnabled = cursorInterruptEnabled
-        return config
+    var selectedProfile: Profile {
+        library.selected ?? library.profiles[0]
     }
 
-    // MARK: - Actions
+    var runningProfile: Profile? {
+        guard let id = runningProfileID else { return nil }
+        return library.profiles.first { $0.id == id }
+    }
 
-    func toggleEngine() {
+    func binding<T>(for keyPath: WritableKeyPath<Profile, T>) -> Binding<T> {
+        Binding(
+            get: { [weak self] in
+                guard let self = self, let profile = self.library.selected else {
+                    return Profile()[keyPath: keyPath]
+                }
+                return profile[keyPath: keyPath]
+            },
+            set: { [weak self] newValue in
+                guard let self = self,
+                      let idx = self.library.profiles.firstIndex(where: { $0.id == self.library.selectedID })
+                else { return }
+                self.library.profiles[idx][keyPath: keyPath] = newValue
+                self.syncHotkeys()
+                self.saveLibrary()
+                self.objectWillChange.send()
+            }
+        )
+    }
+
+    var intervalValueBinding: Binding<Double> { binding(for: \.intervalValue) }
+    var intervalUnitBinding: Binding<IntervalUnit> { binding(for: \.intervalUnit) }
+    var clickButtonBinding: Binding<ClickButton> { binding(for: \.button) }
+    var clickActionBinding: Binding<ClickAction> { binding(for: \.action) }
+    var targetsBinding: Binding<[TargetPoint]> { binding(for: \.targets) }
+    var executionLimitIsFiniteBinding: Binding<Bool> { binding(for: \.executionLimitIsFinite) }
+    var executionLimitCountBinding: Binding<Int> { binding(for: \.executionLimitCount) }
+    var cursorInterruptEnabledBinding: Binding<Bool> { binding(for: \.cursorInterruptEnabled) }
+    var selectedHotkeyBinding: Binding<KeyCombo?> { binding(for: \.hotkey) }
+
+    // MARK: - Profile Management
+
+    func selectProfile(id: UUID) {
+        guard library.profiles.contains(where: { $0.id == id }) else { return }
+        library.selectedID = id
+        saveLibrary()
+        objectWillChange.send()
+    }
+
+    @discardableResult
+    func addProfile() -> Profile {
+        let profile = library.add()
+        library.selectedID = profile.id
+        syncHotkeys()
+        saveLibrary()
+        objectWillChange.send()
+        return profile
+    }
+
+    @discardableResult
+    func duplicateProfile(id: UUID) -> Profile? {
+        guard let copy = library.duplicate(id: id) else { return nil }
+        library.selectedID = copy.id
+        syncHotkeys()
+        saveLibrary()
+        objectWillChange.send()
+        return copy
+    }
+
+    func deleteProfile(id: UUID) {
+        if runningProfileID == id {
+            stopEngine()
+        }
+        library.delete(id: id)
+        syncHotkeys()
+        saveLibrary()
+        objectWillChange.send()
+    }
+
+    func renameProfile(id: UUID, newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let idx = library.profiles.firstIndex(where: { $0.id == id }) {
+            library.profiles[idx].name = trimmed
+            saveLibrary()
+            objectWillChange.send()
+        }
+    }
+
+    func syncHotkeys() {
+        var map: [UUID: KeyCombo] = [:]
+        for profile in library.profiles {
+            if let combo = profile.hotkey {
+                map[profile.id] = combo
+            }
+        }
+        hotkeys.setHotkeys(map)
+    }
+
+    func saveLibrary() {
+        ProfileStore.save(library)
+    }
+
+    // MARK: - Execution
+
+    func triggerProfile(id: UUID) {
         // Resign first responder so any active text field commits its value immediately
         NSApp.keyWindow?.makeFirstResponder(nil)
 
         if engine.isRunning {
-            engine.stop()
-        } else {
-            guard accessibility.isGranted else {
-                engine.engineError = .permissionDenied
+            if runningProfileID == id {
+                // Toggling off the active profile
+                stopEngine()
                 return
             }
-            engine.start(config: currentConfiguration)
+            // Switching profiles: stop current sequence
+            engine.stop()
         }
+
+        guard accessibility.isGranted else {
+            engine.engineError = .permissionDenied
+            return
+        }
+
+        guard let profile = library.profiles.first(where: { $0.id == id }) else { return }
+        library.selectedID = id
+        runningProfileID = id
+        engine.start(config: profile.configuration)
+    }
+
+    func toggleEngine() {
+        triggerProfile(id: library.selectedID)
     }
 
     func stopEngine() {
+        runningProfileID = nil
         engine.stop()
+    }
+
+    // MARK: - Import / Export
+
+    func exportProfilesData() throws -> Data {
+        return try ProfileStore.exportData(library.profiles)
+    }
+
+    @discardableResult
+    func importProfiles(from data: Data) throws -> [UUID] {
+        let imported = try ProfileStore.importProfiles(from: data)
+        let addedIDs = library.merge(imported: imported)
+        if let firstAdded = addedIDs.first {
+            library.selectedID = firstAdded
+        }
+        syncHotkeys()
+        saveLibrary()
+        objectWillChange.send()
+        return addedIDs
+    }
+
+    func exportProfiles() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "AutoClickerProfiles.json"
+        panel.prompt = "Export"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let data = try exportProfilesData()
+                try data.write(to: url)
+            } catch {
+                print("[AppState] Export error: \(error)")
+            }
+        }
+    }
+
+    func importProfiles() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "Import"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let data = try Data(contentsOf: url)
+                _ = try importProfiles(from: data)
+            } catch {
+                print("[AppState] Import error: \(error)")
+            }
+        }
     }
 }

@@ -45,7 +45,7 @@ enum Constants {
 
 // MARK: - Interval Unit
 
-enum IntervalUnit: String, CaseIterable, Identifiable {
+enum IntervalUnit: String, CaseIterable, Identifiable, Codable {
     case milliseconds = "ms"
     case minutes = "min"
 

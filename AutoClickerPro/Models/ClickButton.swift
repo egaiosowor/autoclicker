@@ -3,7 +3,7 @@ import CoreGraphics
 // MARK: - Click Button
 
 /// Which mouse button to simulate.
-enum ClickButton: String, CaseIterable, Identifiable {
+enum ClickButton: String, CaseIterable, Identifiable, Codable {
     case left = "Left"
     case right = "Right"
     case middle = "Middle"

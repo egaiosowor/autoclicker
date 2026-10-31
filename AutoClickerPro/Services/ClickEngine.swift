@@ -29,6 +29,19 @@ final class ClickEngine: ObservableObject {
     private var currentTargetIndex: Int = 0
     private var activity: NSObjectProtocol?
 
+    /// Identifies the current run. Bumped on the main thread by `start`; main-thread UI
+    /// updates posted by an older run are dropped, so a quick stop-then-start (switching
+    /// profiles) can't be clobbered by the previous run's late updates.
+    private var runToken = 0
+    private var activeToken = 0  // queue-confined copy of `runToken`
+
+    private func onMain(_ token: Int, _ work: @escaping (ClickEngine) -> Void) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.runToken == token else { return }
+            work(self)
+        }
+    }
+
     // MARK: - Lifecycle
 
     /// Validates the configuration, then begins posting click events.
@@ -51,9 +64,12 @@ final class ClickEngine: ObservableObject {
         activeTargetIndex = 0
         startDate = Date()
         isRunning = true
+        runToken += 1
+        let token = runToken
 
         queue.async { [weak self] in
             guard let self = self else { return }
+            self.activeToken = token
             self.config = config
             self.running = true
             self.localClickCount = 0
@@ -79,14 +95,13 @@ final class ClickEngine: ObservableObject {
         guard isRunning else { return }
         isRunning = false
         activeTargetIndex = 0
+        let token = runToken
 
         queue.async { [weak self] in
             guard let self = self else { return }
             let finalCount = self.localClickCount
             self.teardown()
-            DispatchQueue.main.async {
-                self.clickCount = finalCount
-            }
+            self.onMain(token) { $0.clickCount = finalCount }
         }
     }
 
@@ -129,12 +144,11 @@ final class ClickEngine: ObservableObject {
                 if sqrt(dx * dx + dy * dy) > Constants.cursorInterruptThreshold {
                     let finalCount = localClickCount
                     teardown()
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else { return }
-                        self.clickCount = finalCount
-                        self.isRunning = false
-                        self.activeTargetIndex = 0
-                        self.engineError = .cursorInterrupt
+                    onMain(activeToken) { engine in
+                        engine.clickCount = finalCount
+                        engine.isRunning = false
+                        engine.activeTargetIndex = 0
+                        engine.engineError = .cursorInterrupt
                     }
                     return
                 }
@@ -157,20 +171,17 @@ final class ClickEngine: ObservableObject {
         let currentCount = localClickCount
         let currentIdx = targetIndex
 
-        DispatchQueue.main.async { [weak self] in
-            self?.activeTargetIndex = currentIdx
-        }
+        onMain(activeToken) { $0.activeTargetIndex = currentIdx }
 
         // --- Execution limit (runs N full cycles through all targets) ---
         if case .count(let cycles) = config.executionLimit {
             let totalNeeded = max(cycles, 1) * config.targets.count
             if currentCount >= totalNeeded {
                 teardown()
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    self.clickCount = currentCount
-                    self.isRunning = false
-                    self.activeTargetIndex = 0
+                onMain(activeToken) { engine in
+                    engine.clickCount = currentCount
+                    engine.isRunning = false
+                    engine.activeTargetIndex = 0
                 }
                 return
             }
@@ -182,9 +193,7 @@ final class ClickEngine: ObservableObject {
         let now = CFAbsoluteTimeGetCurrent()
         if now - lastUIUpdateTime >= 0.033 {
             lastUIUpdateTime = now
-            DispatchQueue.main.async { [weak self] in
-                self?.clickCount = currentCount
-            }
+            onMain(activeToken) { $0.clickCount = currentCount }
         }
 
         // --- Delay before the next click: global interval + this target's extra wait ---
