@@ -24,11 +24,20 @@ enum Constants {
 
     // MARK: Default Hotkeys
 
-    /// Default Start / Stop shortcut: Option + Command + S
-    static let defaultStartStopCombo = KeyCombo(
+    /// Default shortcut for Profile 1: Option + Command + S
+    static let defaultProfile1Combo = KeyCombo(
         keyCode: UInt16(kVK_ANSI_S),
         modifiers: [.option, .command]
     )
+
+    /// Default shortcut for Profile 2: Option + Command + D
+    static let defaultProfile2Combo = KeyCombo(
+        keyCode: UInt16(kVK_ANSI_D),
+        modifiers: [.option, .command]
+    )
+
+    /// Backward-compatibility alias
+    static let defaultStartStopCombo = defaultProfile1Combo
 
     /// Function key preset: F6
     static let defaultF6StartStopCombo = KeyCombo(keyCode: UInt16(kVK_F6))
@@ -58,11 +67,12 @@ enum IntervalUnit: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Convert a value in this unit to seconds.
     func toSeconds(_ value: Double) -> TimeInterval {
         switch self {
-        case .milliseconds: return value / 1_000.0
-        case .minutes: return value * 60.0
+        case .milliseconds:
+            return value / 1000.0
+        case .minutes:
+            return value * 60.0
         }
     }
 }

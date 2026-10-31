@@ -4,129 +4,67 @@ import XCTest
 
 final class ProfileLibraryTests: XCTestCase {
 
-    func testDefaultLibraryHasOneProfile() {
+    func testDefaultLibraryHasTwoProfiles() {
         let library = ProfileLibrary(profiles: [])
-        XCTAssertEqual(library.profiles.count, 1)
-        XCTAssertEqual(library.profiles.first?.name, "Profile 1")
-        XCTAssertEqual(library.selectedID, library.profiles.first?.id)
-    }
-
-    func testAddProfileGeneratesUniqueName() {
-        var library = ProfileLibrary(profiles: [Profile(name: "Profile 1")])
-        let p2 = library.add()
-        XCTAssertEqual(p2.name, "Profile 2")
         XCTAssertEqual(library.profiles.count, 2)
-        XCTAssertNil(p2.hotkey)
+        XCTAssertEqual(library.profiles[0].name, "Profile 1")
+        XCTAssertEqual(library.profiles[1].name, "Profile 2")
+        XCTAssertEqual(library.selectedID, library.profiles[0].id)
     }
 
-    func testDuplicateProfileClonesSettingsWithoutHotkey() {
-        var p1 = Profile(name: "Mining")
-        p1.hotkey = KeyCombo(keyCode: UInt16(kVK_ANSI_1), modifiers: [.command])
-        p1.targets = [TargetPoint(x: 100, y: 200, delayMs: 50)]
-        p1.intervalValue = 42
-
-        var library = ProfileLibrary(profiles: [p1], selectedID: p1.id)
-        guard let copy = library.duplicate(id: p1.id) else {
-            XCTFail("Duplicate failed")
-            return
-        }
-
-        XCTAssertNotEqual(copy.id, p1.id)
-        XCTAssertEqual(copy.name, "Mining copy")
-        XCTAssertNil(copy.hotkey, "Hotkey should be nil to avoid collision")
-        XCTAssertEqual(copy.intervalValue, 42)
-        XCTAssertEqual(copy.targets.count, 1)
-        XCTAssertNotEqual(copy.targets[0].id, p1.targets[0].id, "Target IDs must be refreshed")
-        XCTAssertEqual(copy.targets[0].x, 100)
-    }
-
-    func testDeleteProfilePreventsDeletingLastProfile() {
-        let p1 = Profile(name: "Only One")
-        var library = ProfileLibrary(profiles: [p1])
-        let resultID = library.delete(id: p1.id)
-        XCTAssertEqual(resultID, p1.id)
-        XCTAssertEqual(library.profiles.count, 1)
-    }
-
-    func testDeleteProfileSwitchesSelection() {
-        let p1 = Profile(name: "P1")
-        let p2 = Profile(name: "P2")
-        let p3 = Profile(name: "P3")
-        var library = ProfileLibrary(profiles: [p1, p2, p3], selectedID: p2.id)
-
-        let nextSelectedID = library.delete(id: p2.id)
-        XCTAssertEqual(library.profiles.count, 2)
-        XCTAssertEqual(nextSelectedID, p3.id)
-        XCTAssertEqual(library.selectedID, p3.id)
+    func testDefaultHotkeysAreSAndD() {
+        let library = ProfileLibrary(profiles: [])
+        XCTAssertEqual(library.profiles[0].hotkey, Constants.defaultProfile1Combo)
+        XCTAssertEqual(library.profiles[1].hotkey, Constants.defaultProfile2Combo)
+        XCTAssertEqual(library.profiles[0].hotkey?.displayString, "⌥⌘ S")
+        XCTAssertEqual(library.profiles[1].hotkey?.displayString, "⌥⌘ D")
     }
 
     func testHotkeyConflictDetection() {
-        let comboA = KeyCombo(keyCode: UInt16(kVK_ANSI_A), modifiers: [.command])
-        let comboB = KeyCombo(keyCode: UInt16(kVK_ANSI_B), modifiers: [.command])
+        let comboA = Constants.defaultProfile1Combo
+        let comboB = Constants.defaultProfile2Combo
 
-        var p1 = Profile(name: "P1")
-        p1.hotkey = comboA
-        var p2 = Profile(name: "P2")
-        p2.hotkey = comboB
-
-        let library = ProfileLibrary(profiles: [p1, p2])
+        let library = ProfileLibrary()
 
         // Same profile should not conflict with itself
-        XCTAssertNil(library.hotkeyConflict(comboA, excluding: p1.id))
+        XCTAssertNil(library.hotkeyConflict(comboA, excluding: library.profiles[0].id))
 
-        // Different profile using comboA should conflict
-        let conflict = library.hotkeyConflict(comboA, excluding: p2.id)
+        // Profile 2 trying to use comboA (used by Profile 1) should conflict
+        let conflict = library.hotkeyConflict(comboA, excluding: library.profiles[1].id)
         XCTAssertNotNil(conflict)
-        XCTAssertEqual(conflict?.id, p1.id)
+        XCTAssertEqual(conflict?.id, library.profiles[0].id)
+
+        // Profile 1 trying to use comboB (used by Profile 2) should conflict
+        let conflict2 = library.hotkeyConflict(comboB, excluding: library.profiles[0].id)
+        XCTAssertNotNil(conflict2)
+        XCTAssertEqual(conflict2?.id, library.profiles[1].id)
 
         // Unused combo should not conflict
         let comboC = KeyCombo(keyCode: UInt16(kVK_ANSI_C), modifiers: [.command])
-        XCTAssertNil(library.hotkeyConflict(comboC, excluding: p2.id))
-    }
-
-    func testMergeProfilesDropsCollidingHotkeys() {
-        let combo1 = KeyCombo(keyCode: UInt16(kVK_ANSI_1), modifiers: [.command])
-        var existing = Profile(name: "Existing")
-        existing.hotkey = combo1
-
-        var library = ProfileLibrary(profiles: [existing])
-
-        var imported1 = Profile(name: "Imported 1")
-        imported1.hotkey = combo1 // Collides with existing!
-
-        var imported2 = Profile(name: "Imported 2")
-        let combo2 = KeyCombo(keyCode: UInt16(kVK_ANSI_2), modifiers: [.command])
-        imported2.hotkey = combo2 // Unique!
-
-        let addedIDs = library.merge(imported: [imported1, imported2])
-        XCTAssertEqual(addedIDs.count, 2)
-        XCTAssertEqual(library.profiles.count, 3)
-
-        let merged1 = library.profiles.first { $0.id == addedIDs[0] }
-        let merged2 = library.profiles.first { $0.id == addedIDs[1] }
-
-        XCTAssertNil(merged1?.hotkey, "Colliding hotkey must be stripped")
-        XCTAssertEqual(merged2?.hotkey, combo2, "Non-colliding hotkey should be retained")
+        XCTAssertNil(library.hotkeyConflict(comboC, excluding: library.profiles[0].id))
     }
 }
 
 final class ProfileStoreTests: XCTestCase {
 
     func testExportAndImportRoundTrip() throws {
-        var p1 = Profile(name: "Profile Alpha")
-        p1.hotkey = KeyCombo(keyCode: UInt16(kVK_ANSI_A), modifiers: [.option, .command])
+        var p1 = Profile(name: "Profile 1")
+        p1.hotkey = Constants.defaultProfile1Combo
         p1.intervalValue = 123
         p1.targets = [TargetPoint(x: 10, y: 20, delayMs: 5)]
 
-        let data = try ProfileStore.exportData([p1])
+        var p2 = Profile(name: "Profile 2")
+        p2.hotkey = Constants.defaultProfile2Combo
+        p2.intervalValue = 456
+
+        let data = try ProfileStore.exportData([p1, p2])
         let imported = try ProfileStore.importProfiles(from: data)
 
-        XCTAssertEqual(imported.count, 1)
-        XCTAssertEqual(imported[0].name, "Profile Alpha")
-        XCTAssertEqual(imported[0].hotkey, p1.hotkey)
+        XCTAssertEqual(imported.count, 2)
+        XCTAssertEqual(imported[0].hotkey, Constants.defaultProfile1Combo)
+        XCTAssertEqual(imported[1].hotkey, Constants.defaultProfile2Combo)
         XCTAssertEqual(imported[0].intervalValue, 123)
-        XCTAssertEqual(imported[0].targets.count, 1)
-        XCTAssertEqual(imported[0].targets[0].x, 10)
+        XCTAssertEqual(imported[1].intervalValue, 456)
     }
 
     func testLegacyMigration() {
@@ -139,44 +77,42 @@ final class ProfileStoreTests: XCTestCase {
         defaults.set(legacyData, forKey: ProfileStore.legacyStartStopKey)
 
         let loaded = ProfileStore.load(from: defaults)
-        XCTAssertEqual(loaded.profiles.count, 1)
+        XCTAssertEqual(loaded.profiles.count, 2)
         XCTAssertEqual(loaded.profiles[0].hotkey, legacyCombo)
+        XCTAssertEqual(loaded.profiles[1].hotkey, Constants.defaultProfile2Combo)
     }
 }
 
 final class AppStateProfileIntegrationTests: XCTestCase {
 
     func testAppStateProfileSwitchingAndExecution() {
-        var p1 = Profile(name: "P1")
+        var p1 = Profile(name: "Profile 1")
         p1.intervalValue = 10
+        p1.hotkey = Constants.defaultProfile1Combo
         p1.targets = [TargetPoint(x: 100, y: 100, delayMs: 0)]
 
-        var p2 = Profile(name: "P2")
+        var p2 = Profile(name: "Profile 2")
         p2.intervalValue = 20
+        p2.hotkey = Constants.defaultProfile2Combo
         p2.targets = [TargetPoint(x: 200, y: 200, delayMs: 0)]
 
         let library = ProfileLibrary(profiles: [p1, p2], selectedID: p1.id)
         let appState = AppState(library: library)
 
         XCTAssertEqual(appState.selectedProfile.id, p1.id)
-        XCTAssertEqual(appState.selectedProfile.name, "P1")
+        XCTAssertEqual(appState.selectedProfile.name, "Profile 1")
 
-        // Switch selection to P2
+        // Switch selection to Profile 2
         appState.selectProfile(id: p2.id)
         XCTAssertEqual(appState.selectedProfile.id, p2.id)
-        XCTAssertEqual(appState.selectedProfile.name, "P2")
+        XCTAssertEqual(appState.selectedProfile.name, "Profile 2")
 
         // Modify a property via binding
         appState.intervalValueBinding.wrappedValue = 99
         XCTAssertEqual(appState.selectedProfile.intervalValue, 99)
 
-        // Add a profile
-        let p3 = appState.addProfile()
-        XCTAssertEqual(appState.library.profiles.count, 3)
-        XCTAssertEqual(appState.selectedProfile.id, p3.id)
-
-        // Delete P3
-        appState.deleteProfile(id: p3.id)
-        XCTAssertEqual(appState.library.profiles.count, 2)
+        // Hotkeys are mapped to both profiles
+        XCTAssertEqual(appState.hotkeys.profileHotkeys[p1.id], Constants.defaultProfile1Combo)
+        XCTAssertEqual(appState.hotkeys.profileHotkeys[p2.id], Constants.defaultProfile2Combo)
     }
 }

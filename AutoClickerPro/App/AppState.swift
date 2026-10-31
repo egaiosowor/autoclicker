@@ -1,10 +1,9 @@
 import Combine
 import SwiftUI
-import UniformTypeIdentifiers
 
 // MARK: - App State
 
-/// Central observable object wiring services together and holding the user's profile library.
+/// Central observable object wiring services together and holding the two profiles.
 final class AppState: ObservableObject {
 
     // MARK: Library State
@@ -130,44 +129,9 @@ final class AppState: ObservableObject {
         objectWillChange.send()
     }
 
-    @discardableResult
-    func addProfile() -> Profile {
-        let profile = library.add()
-        library.selectedID = profile.id
-        syncHotkeys()
-        saveLibrary()
-        objectWillChange.send()
-        return profile
-    }
-
-    @discardableResult
-    func duplicateProfile(id: UUID) -> Profile? {
-        guard let copy = library.duplicate(id: id) else { return nil }
-        library.selectedID = copy.id
-        syncHotkeys()
-        saveLibrary()
-        objectWillChange.send()
-        return copy
-    }
-
-    func deleteProfile(id: UUID) {
-        if runningProfileID == id {
-            stopEngine()
-        }
-        library.delete(id: id)
-        syncHotkeys()
-        saveLibrary()
-        objectWillChange.send()
-    }
-
-    func renameProfile(id: UUID, newName: String) {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if let idx = library.profiles.firstIndex(where: { $0.id == id }) {
-            library.profiles[idx].name = trimmed
-            saveLibrary()
-            objectWillChange.send()
-        }
+    func selectProfile(index: Int) {
+        guard index >= 0 && index < library.profiles.count else { return }
+        selectProfile(id: library.profiles[index].id)
     }
 
     func syncHotkeys() {
@@ -218,56 +182,5 @@ final class AppState: ObservableObject {
     func stopEngine() {
         runningProfileID = nil
         engine.stop()
-    }
-
-    // MARK: - Import / Export
-
-    func exportProfilesData() throws -> Data {
-        return try ProfileStore.exportData(library.profiles)
-    }
-
-    @discardableResult
-    func importProfiles(from data: Data) throws -> [UUID] {
-        let imported = try ProfileStore.importProfiles(from: data)
-        let addedIDs = library.merge(imported: imported)
-        if let firstAdded = addedIDs.first {
-            library.selectedID = firstAdded
-        }
-        syncHotkeys()
-        saveLibrary()
-        objectWillChange.send()
-        return addedIDs
-    }
-
-    func exportProfiles() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "AutoClickerProfiles.json"
-        panel.prompt = "Export"
-        if panel.runModal() == .OK, let url = panel.url {
-            do {
-                let data = try exportProfilesData()
-                try data.write(to: url)
-            } catch {
-                print("[AppState] Export error: \(error)")
-            }
-        }
-    }
-
-    func importProfiles() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.prompt = "Import"
-        if panel.runModal() == .OK, let url = panel.url {
-            do {
-                let data = try Data(contentsOf: url)
-                _ = try importProfiles(from: data)
-            } catch {
-                print("[AppState] Import error: \(error)")
-            }
-        }
     }
 }

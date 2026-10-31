@@ -12,6 +12,14 @@ struct HotkeySettingsView: View {
     let library: ProfileLibrary
     @State private var errorMessage: String?
 
+    private var isFirstProfile: Bool {
+        library.profiles.firstIndex(where: { $0.id == profileID }) == 0
+    }
+
+    private var defaultCombo: KeyCombo {
+        isFirstProfile ? Constants.defaultProfile1Combo : Constants.defaultProfile2Combo
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -44,7 +52,7 @@ struct HotkeySettingsView: View {
 
             VStack(spacing: 8) {
                 hotkeyRow(
-                    label: "Start / Stop Shortcut",
+                    label: isFirstProfile ? "Profile 1 Shortcut" : "Profile 2 Shortcut",
                     description: "Triggers this sequence (or press ⎋ Esc to stop)",
                     combo: $combo
                 )
@@ -67,8 +75,8 @@ struct HotkeySettingsView: View {
                 Spacer()
 
                 Menu {
-                    Button("Default (⌥⌘S)") {
-                        applyPreset(Constants.defaultStartStopCombo)
+                    Button("Default (\(defaultCombo.displayString))") {
+                        applyPreset(defaultCombo)
                     }
                     Button("Function Key (F6)") {
                         applyPreset(Constants.defaultF6StartStopCombo)
